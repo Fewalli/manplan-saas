@@ -1,0 +1,52 @@
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-manplan}
+      POSTGRES_USER: ${POSTGRES_USER:-manplan}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-manplan}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  api:
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+    env_file: .env
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      JWT_SECRET: ${JWT_SECRET}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "${API_PORT:-8000}:8000"
+
+  cmms_web:
+    build:
+      context: ./apps/cmms_web
+      dockerfile: Dockerfile
+    environment:
+      VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8000}
+    depends_on:
+      - api
+    ports:
+      - "${CMMS_WEB_PORT:-3000}:80"
+
+  portal_web:
+    build:
+      context: ./apps/portal_web
+      dockerfile: Dockerfile
+    ports:
+      - "${PORTAL_WEB_PORT:-3001}:80"
+
+volumes:
+  pg_data:
