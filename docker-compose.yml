@@ -1,52 +1,62 @@
 services:
   db:
     image: postgres:16
+    container_name: manplan-db
+    restart: unless-stopped
     environment:
-      POSTGRES_DB: ${POSTGRES_DB:-manplan}
-      POSTGRES_USER: ${POSTGRES_USER:-manplan}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-manplan}
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     ports:
-      - "${POSTGRES_PORT:-5432}:5432"
+      - "5432:5432"
     volumes:
       - pg_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
-      interval: 5s
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
       timeout: 5s
-      retries: 20
+      retries: 10
 
   api:
     build:
       context: ./api
       dockerfile: Dockerfile
-    env_file: .env
+    container_name: manplan-api
+    restart: unless-stopped
+    env_file:
+      - .env
     environment:
-      DATABASE_URL: ${DATABASE_URL}
-      JWT_SECRET: ${JWT_SECRET}
-      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      PYTHONPATH: /app
+    ports:
+      - "${API_PORT}:8000"
     depends_on:
       db:
         condition: service_healthy
-    ports:
-      - "${API_PORT:-8000}:8000"
+    volumes:
+      - ./api:/app
+    command: sh -c "uvicorn manplan_api.main:app --host 0.0.0.0 --port 8000 --reload"
 
   cmms_web:
     build:
       context: ./apps/cmms_web
       dockerfile: Dockerfile
-    environment:
-      VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8000}
+    container_name: manplan-cmms-web
+    restart: unless-stopped
+    ports:
+      - "${CMMS_WEB_PORT}:80"
     depends_on:
       - api
-    ports:
-      - "${CMMS_WEB_PORT:-3000}:80"
 
   portal_web:
     build:
       context: ./apps/portal_web
       dockerfile: Dockerfile
+    container_name: manplan-portal-web
+    restart: unless-stopped
     ports:
-      - "${PORTAL_WEB_PORT:-3001}:80"
+      - "${PORTAL_WEB_PORT}:80"
+    depends_on:
+      - api
 
 volumes:
   pg_data:

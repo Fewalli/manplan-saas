@@ -1,0 +1,12 @@
+{
+  "python.defaultInterpreterPath": "C:\\dev\\manplan-saas\\.venv\\Scripts\\python.exe",
+  "python.analysis.extraPaths": [
+    "C:\\dev\\manplan-saas\\api"
+  ],
+  "python.analysis.autoImportCompletions": true,
+  "python.analysis.typeCheckingMode": "basic",
+  "python.terminal.activateEnvironment": true,
+  "terminal.integrated.env.windows": {
+    "PYTHONPATH": "C:\\dev\\manplan-saas\\api"
+  }
+}

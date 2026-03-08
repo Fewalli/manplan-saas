@@ -1,21 +1,34 @@
-from fastapi import FastAPI
-from pythonjsonlogger import jsonlogger
 import logging
+import sys
 
-from .settings import settings
+from fastapi import FastAPI
+from pythonjsonlogger.json import JsonFormatter
 
-app = FastAPI(title="ManPlan API", version="0.1.0")
+from app.api.router import api_router
+from app.core.config import settings
 
-def setup_logging():
-    logger = logging.getLogger()
-    logger.setLevel(settings.log_level.upper())
-    handler = logging.StreamHandler()
-    formatter = jsonlogger.JsonFormatter("%(levelname)s %(name)s %(message)s")
+
+def configure_logging() -> None:
+    handler = logging.StreamHandler(sys.stdout)
+    formatter: logging.Formatter = JsonFormatter(
+        "%(asctime)s %(levelname)s %(name)s %(message)s"
+    )
     handler.setFormatter(formatter)
-    logger.handlers = [handler]
 
-setup_logging()
+    root_logger = logging.getLogger()
+    root_logger.handlers.clear()
+    root_logger.addHandler(handler)
+    root_logger.setLevel(settings.LOG_LEVEL.upper())
 
-@app.get("/health")
-def health():
+
+configure_logging()
+
+app = FastAPI(title=settings.APP_NAME)
+
+
+@app.get("/health", tags=["health"])
+def healthcheck() -> dict[str, str]:
     return {"status": "ok"}
+
+
+app.include_router(api_router, prefix=settings.API_V1_PREFIX)
