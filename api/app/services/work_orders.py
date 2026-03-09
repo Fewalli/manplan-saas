@@ -13,7 +13,7 @@ from app.models.work_order import WorkOrder, WorkOrderStatus, WorkOrderType
 from app.models.work_order_counter import WorkOrderCounter
 from app.models.work_order_event import WorkOrderEvent, WorkOrderEventType
 from app.schemas.work_order import WorkOrderClose, WorkOrderCreate, WorkOrderFinalize, WorkOrderSuspend
-
+from app.models.asset import Asset
 
 class DomainError(Exception):
     pass
@@ -76,8 +76,32 @@ def _with_roles_stmt(user_id: int):
         .where(User.id == user_id)
     )
 
+def _get_valid_asset_or_raise(db: Session, *, tenant_id: int, asset_id: int) -> Asset:
+    asset = db.execute(
+        select(Asset).where(
+            Asset.id == asset_id,
+            Asset.tenant_id == tenant_id,
+        )
+    ).scalar_one_or_none()
+
+    if asset is None:
+        raise DomainError("Ativo inválido para este tenant")
+
+    if not asset.is_active:
+        raise DomainError("Ativo inativo não pode receber nova OS")
+
+    if asset.area_id is None:
+        raise DomainError("Ativo sem área vinculada não pode receber nova OS")
+
+    return asset
 
 def create_work_order(db: Session, *, current_user: User, payload: WorkOrderCreate) -> WorkOrder:
+    asset = _get_valid_asset_or_raise(
+        db,
+        tenant_id=current_user.tenant_id,
+        asset_id=payload.asset_id,
+    )
+
     machine_stopped = payload.type == WorkOrderType.OSC
     sequence_number = next_sequence_number(db, current_user.tenant_id)
     code = make_code(payload.type, sequence_number)
@@ -90,7 +114,7 @@ def create_work_order(db: Session, *, current_user: User, payload: WorkOrderCrea
         revision_number=0,
         code=code,
         requester_id=current_user.id,
-        asset_id=payload.asset_id,
+        asset_id=asset.id,
         description=payload.description,
         scheduled_date=payload.scheduled_date,
         machine_stopped=machine_stopped,
@@ -103,7 +127,11 @@ def create_work_order(db: Session, *, current_user: User, payload: WorkOrderCrea
         work_order_id=wo.id,
         actor_user_id=current_user.id,
         event_type=WorkOrderEventType.OPENED,
-        payload={"type": payload.type.value, "description": payload.description},
+        payload={
+            "type": payload.type.value,
+            "description": payload.description,
+            "asset_id": asset.id,
+        },
     )
 
     db.commit()

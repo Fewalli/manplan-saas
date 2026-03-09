@@ -11,6 +11,8 @@ class AssetCreate(BaseModel):
 class AssetRead(BaseModel):
     id: int
     area_id: int
+    area_code: str
+    area_name: str
     code: str
     name: str
     location: str | None

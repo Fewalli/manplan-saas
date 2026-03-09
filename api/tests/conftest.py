@@ -18,6 +18,7 @@ from app.models.user import User
 from manplan_api.main import app
 
 
+
 class SeededDb(TypedDict):
     tenant: Tenant
     admin_user: User
@@ -26,6 +27,7 @@ class SeededDb(TypedDict):
     multi_role_user: User
     area: Area
     asset: Asset
+    
 
 
 @pytest.fixture()

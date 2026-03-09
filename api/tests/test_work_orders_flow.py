@@ -121,3 +121,73 @@ def test_close_not_met_creates_revision(client, seeded_db):
     assert listing.status_code == 200
     codes = [item["code"] for item in listing.json()]
     assert any(code.endswith("-R1") for code in codes)
+def test_create_work_order_requires_asset_id(client):
+    requester_token = login(client, "solicitante@teste.com", "Senha123!")
+
+    response = client.post(
+        "/api/v1/work-orders",
+        json={"type": "OSM", "description": "Inspeção sem ativo"},
+        headers=auth_headers(requester_token),
+    )
+    assert response.status_code == 422
+
+
+def test_create_work_order_rejects_inactive_asset(client, seeded_db, db_session):
+    from app.models.asset import Asset
+
+    requester_token = login(client, "solicitante@teste.com", "Senha123!")
+    asset = seeded_db["asset"]
+    asset.is_active = False
+    db_session.add(asset)
+    db_session.commit()
+
+    response = client.post(
+        "/api/v1/work-orders",
+        json={"type": "OSC", "asset_id": asset.id, "description": "Falha no motor"},
+        headers=auth_headers(requester_token),
+    )
+    assert response.status_code == 400
+    assert "Ativo inativo" in response.json()["detail"]
+
+
+def test_create_asset_rejects_duplicate_code_same_tenant(client):
+    admin_token = login(client, "multiplo@teste.com", "Senha123!")
+
+    response = client.post(
+        "/api/v1/assets",
+        json={
+            "area_id": 1,
+            "code": "ATV-001",
+            "name": "Ativo duplicado",
+            "location": "Linha X",
+        },
+        headers=auth_headers(admin_token),
+    )
+    assert response.status_code == 400
+    assert "Já existe um ativo com este código" in response.json()["detail"]
+
+
+def test_create_area_rejects_duplicate_code_same_tenant(client):
+    admin_token = login(client, "multiplo@teste.com", "Senha123!")
+
+    response = client.post(
+        "/api/v1/areas",
+        json={
+            "code": "AREA-01",
+            "name": "Área duplicada",
+        },
+        headers=auth_headers(admin_token),
+    )
+    assert response.status_code == 400
+    assert "Já existe uma área com este código" in response.json()["detail"]
+
+
+def test_list_assets_returns_area_metadata(client):
+    admin_token = login(client, "multiplo@teste.com", "Senha123!")
+
+    response = client.get("/api/v1/assets", headers=auth_headers(admin_token))
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data) >= 1
+    assert "area_code" in data[0]
+    assert "area_name" in data[0]

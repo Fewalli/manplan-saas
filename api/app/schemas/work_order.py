@@ -12,13 +12,11 @@ from app.schemas.common_time import DurationDHM
 class WorkOrderCreate(BaseModel):
     type: WorkOrderType
     description: str = Field(min_length=1)
-    asset_id: Optional[int] = None
+    asset_id: int
     scheduled_date: Optional[datetime] = None
 
     @model_validator(mode="after")
     def validate_by_type(self):
-        if self.type in {WorkOrderType.OSC, WorkOrderType.OSCP} and not self.asset_id:
-            raise ValueError("asset_id é obrigatório para OSC e OSCP")
         if self.type == WorkOrderType.OSCP and not self.scheduled_date:
             raise ValueError("scheduled_date é obrigatória para OSCP")
         return self

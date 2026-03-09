@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.api.deps import require_roles
@@ -32,11 +33,20 @@ def create_area(
 ):
     area = Area(
         tenant_id=current_user.tenant_id,
-        code=payload.code,
-        name=payload.name,
+        code=payload.code.strip().upper(),
+        name=payload.name.strip(),
         is_active=True,
     )
     db.add(area)
-    db.commit()
+
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Já existe uma área com este código neste tenant.",
+        )
+
     db.refresh(area)
     return area

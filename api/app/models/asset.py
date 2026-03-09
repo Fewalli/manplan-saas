@@ -16,7 +16,11 @@ class Asset(Base):
         nullable=False,
         index=True,
     )
-    area_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    area_id: Mapped[int] = mapped_column(
+        ForeignKey("areas.id"),
+        nullable=False,
+        index=True,
+    )
     code: Mapped[str] = mapped_column(String(80), nullable=False)
     name: Mapped[str] = mapped_column(String(150), nullable=False)
     location: Mapped[str | None] = mapped_column(String(150), nullable=True)
