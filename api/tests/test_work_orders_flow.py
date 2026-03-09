@@ -121,6 +121,8 @@ def test_close_not_met_creates_revision(client, seeded_db):
     assert listing.status_code == 200
     codes = [item["code"] for item in listing.json()]
     assert any(code.endswith("-R1") for code in codes)
+
+
 def test_create_work_order_requires_asset_id(client):
     requester_token = login(client, "solicitante@teste.com", "Senha123!")
 
@@ -133,8 +135,6 @@ def test_create_work_order_requires_asset_id(client):
 
 
 def test_create_work_order_rejects_inactive_asset(client, seeded_db, db_session):
-    from app.models.asset import Asset
-
     requester_token = login(client, "solicitante@teste.com", "Senha123!")
     asset = seeded_db["asset"]
     asset.is_active = False
@@ -150,13 +150,13 @@ def test_create_work_order_rejects_inactive_asset(client, seeded_db, db_session)
     assert "Ativo inativo" in response.json()["detail"]
 
 
-def test_create_asset_rejects_duplicate_code_same_tenant(client):
+def test_create_asset_rejects_duplicate_code_same_tenant(client, seeded_db):
     admin_token = login(client, "multiplo@teste.com", "Senha123!")
 
     response = client.post(
         "/api/v1/assets",
         json={
-            "area_id": 1,
+            "area_id": seeded_db["area"].id,
             "code": "ATV-001",
             "name": "Ativo duplicado",
             "location": "Linha X",
@@ -191,3 +191,43 @@ def test_list_assets_returns_area_metadata(client):
     assert len(data) >= 1
     assert "area_code" in data[0]
     assert "area_name" in data[0]
+
+
+def test_list_work_orders_returns_asset_and_area_context(client, seeded_db):
+    requester_token = login(client, "solicitante@teste.com", "Senha123!")
+
+    create_os(
+        client,
+        requester_token,
+        {"type": "OSC", "asset_id": seeded_db["asset"].id, "description": "Falha contextual"},
+    )
+
+    response = client.get("/api/v1/work-orders", headers=auth_headers(requester_token))
+    assert response.status_code == 200, response.text
+
+    data = response.json()
+    assert len(data) >= 1
+    assert data[0]["asset_id"] == seeded_db["asset"].id
+    assert data[0]["asset_code"] == "ATV-001"
+    assert data[0]["asset_name"] == "Máquina Teste"
+    assert data[0]["area_code"] == "AREA-01"
+    assert data[0]["area_name"] == "Área Teste"
+
+
+def test_get_work_order_detail_returns_asset_and_area_context(client, seeded_db):
+    requester_token = login(client, "solicitante@teste.com", "Senha123!")
+
+    wo = create_os(
+        client,
+        requester_token,
+        {"type": "OSC", "asset_id": seeded_db["asset"].id, "description": "Falha detalhada"},
+    )
+
+    response = client.get(f"/api/v1/work-orders/{wo['id']}", headers=auth_headers(requester_token))
+    assert response.status_code == 200, response.text
+
+    data = response.json()
+    assert data["asset_code"] == "ATV-001"
+    assert data["asset_name"] == "Máquina Teste"
+    assert data["area_code"] == "AREA-01"
+    assert data["area_name"] == "Área Teste"

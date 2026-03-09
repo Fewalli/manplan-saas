@@ -30,6 +30,25 @@ def _raise_domain(exc: DomainError):
     raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
 
 
+@router.get("/monitor/execution-now", response_model=list[ExecutionNowRead])
+def execution_now_endpoint(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    rows = get_execution_now(db, tenant_id=current_user.tenant_id)
+    return [
+        ExecutionNowRead(
+            technician_id=row.technician_id,
+            work_order_id=row.work_order_id,
+            work_order_code=row.work_order_code,
+            asset_id=row.asset_id,
+            started_at=row.started_at,
+            elapsed_minutes=max(0, int((row.elapsed_seconds or 0) // 60)),
+        )
+        for row in rows
+    ]
+
+
 @router.post("", response_model=WorkOrderRead, status_code=status.HTTP_201_CREATED)
 def create_work_order_endpoint(
     payload: WorkOrderCreate,
@@ -123,22 +142,3 @@ def close_work_order_endpoint(
         return close_work_order(db, current_user=current_user, work_order_id=work_order_id, payload=payload)
     except DomainError as exc:
         _raise_domain(exc)
-
-
-@router.get("/monitor/execution-now", response_model=list[ExecutionNowRead])
-def execution_now_endpoint(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
-):
-    rows = get_execution_now(db, tenant_id=current_user.tenant_id)
-    return [
-        ExecutionNowRead(
-            technician_id=row.technician_id,
-            work_order_id=row.work_order_id,
-            work_order_code=row.work_order_code,
-            asset_id=row.asset_id,
-            started_at=row.started_at,
-            elapsed_minutes=max(0, int((row.elapsed_seconds or 0) // 60)),
-        )
-        for row in rows
-    ]

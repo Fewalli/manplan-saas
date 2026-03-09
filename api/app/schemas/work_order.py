@@ -45,13 +45,22 @@ class WorkOrderRead(BaseModel):
     type: WorkOrderType
     status: WorkOrderStatus
     requester_id: int
-    asset_id: Optional[int]
+    asset_id: Optional[int] = None
+    asset_code: str | None = None
+    asset_name: str | None = None
+    asset_location: str | None = None
+    area_id: int | None = None
+    area_code: str | None = None
+    area_name: str | None = None
     description: str
     scheduled_date: Optional[datetime]
     technician_current_id: Optional[int]
+    machine_stopped: bool | None = None
     technician_downtime_minutes: Optional[int]
     requester_downtime_minutes: Optional[int]
     met_expectation: Optional[bool]
+    finalization_at: Optional[datetime] = None
+    closure_at: Optional[datetime] = None
     created_at: datetime
     updated_at: datetime
 

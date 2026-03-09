@@ -8,9 +8,75 @@ from app.db.session import get_db
 from app.models.area import Area
 from app.models.asset import Asset
 from app.models.user import User
-from app.schemas.asset import AssetCreate, AssetRead
+from app.models.work_order import WorkOrder
+from app.schemas.asset import AssetCreate, AssetDetail, AssetHistoryItem, AssetRead
 
 router = APIRouter(prefix="/assets", tags=["assets"])
+
+
+@router.get("/{asset_id}", response_model=AssetDetail)
+def get_asset_detail(
+    asset_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(
+        require_roles("admin_tenant", "planejador", "coordenador_manutencao", "tecnico", "solicitante")
+    ),
+):
+    asset_row = db.execute(
+        select(
+            Asset.id,
+            Asset.area_id,
+            Area.code.label("area_code"),
+            Area.name.label("area_name"),
+            Asset.code,
+            Asset.name,
+            Asset.location,
+            Asset.is_active,
+        )
+        .join(Area, Area.id == Asset.area_id)
+        .where(
+            Asset.id == asset_id,
+            Asset.tenant_id == current_user.tenant_id,
+        )
+    ).mappings().one_or_none()
+
+    if asset_row is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Ativo não encontrado")
+
+    history_rows = db.execute(
+        select(
+            WorkOrder.id,
+            WorkOrder.code,
+            WorkOrder.type,
+            WorkOrder.status,
+            WorkOrder.description,
+            WorkOrder.created_at,
+            WorkOrder.finalization_at,
+            WorkOrder.closure_at,
+        )
+        .where(
+            WorkOrder.tenant_id == current_user.tenant_id,
+            WorkOrder.asset_id == asset_id,
+        )
+        .order_by(WorkOrder.created_at.desc(), WorkOrder.id.desc())
+        .limit(20)
+    ).all()
+
+    history = [
+        AssetHistoryItem(
+            id=row.id,
+            code=row.code,
+            type=row.type.value if hasattr(row.type, "value") else str(row.type),
+            status=row.status.value if hasattr(row.status, "value") else str(row.status),
+            description=row.description,
+            created_at=row.created_at,
+            finalization_at=row.finalization_at,
+            closure_at=row.closure_at,
+        )
+        for row in history_rows
+    ]
+
+    return AssetDetail(**asset_row, recent_work_orders=history)
 
 
 @router.get("", response_model=list[AssetRead])
@@ -77,7 +143,7 @@ def create_asset(
             detail="Já existe um ativo com este código neste tenant.",
         )
 
-    stmt = (
+    row = db.execute(
         select(
             Asset.id,
             Asset.area_id,
@@ -90,6 +156,6 @@ def create_asset(
         )
         .join(Area, Area.id == Asset.area_id)
         .where(Asset.id == asset.id)
-    )
-    row = db.execute(stmt).mappings().one()
+    ).mappings().one()
+
     return AssetRead(**row)
